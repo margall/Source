@@ -42,6 +42,7 @@ end FOTOC;
 
 architecture Behavioral of FOTOC is
 
+signal FOTOC_PRE_BUF		: std_logic;
 signal FOTOC_BUF 	 		: std_logic;
 signal FOTOC_STAT_BUF 	: std_logic;
 signal FOTOC_EDGE_DET	: std_logic;
@@ -55,13 +56,14 @@ begin
 -- FOTOC_STATE - normal or inverting FOTOC_IN, depends on active edge 
 -- FOTOC_BLOCK - enable/reset FOTOC_IRQ (interrupt)
 
-FOTOC_BUF <= FOTOC_IN xor FOTOC_EDGE;
+FOTOC_BUF <= FOTOC_PRE_BUF xor FOTOC_EDGE;
 FOTOC_STAT <=  not FOTOC_BUF;
 
 FOTOC_BUF_PROC: process(FOTOC_F_16MHZ)
 begin	
 
 	if (FOTOC_F_16MHZ'event and FOTOC_F_16MHZ='1') then
+		FOTOC_PRE_BUF <= FOTOC_IN;
 		FOTOC_STAT_BUF <= FOTOC_BUF;
 	end if;
 	

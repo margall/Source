@@ -230,6 +230,7 @@ constant PORTFAZA_ADDR			: std_logic_vector(15 downto 0):= "0000000001000000" ;
 constant KOREKCJE_ADDR			: std_logic_vector(15 downto 0):= "0000000010000000" ;
 constant BLOKADAPO_ADDR			: std_logic_vector(15 downto 0):= "0000000010000010" ;
 constant STER_SHAFT_ADDR		: std_logic_vector(15 downto 0):= "0000000100000000" ;
+constant STER_SH_MUL_ADDR		: std_logic_vector(15 downto 0):= "0000000100000001" ;
 constant TIMERCTRL_ADDR			: std_logic_vector(15 downto 0):= "0000001000000000" ;
 constant FAZATEST_X_ADDR		: std_logic_vector(15 downto 0):= "0000010000000000" ;
 constant TIMERRYNNA_ADDR		: std_logic_vector(15 downto 0):= "0000100000000000" ;
@@ -259,9 +260,11 @@ signal PORTFAZA				: std_logic_vector (7 downto 0);
 signal CS_KOREKCJE 			: STD_LOGIC;
 signal KOREKCJE				: std_logic_vector (7 downto 0);
 signal CS_STER_SHAFT 		: STD_LOGIC;
+signal STER_SHAFT			: std_logic_vector (7 downto 0);
+signal CS_STER_SH_MUL 		: STD_LOGIC;
+signal STER_SH_MUL			: std_logic_vector (7 downto 0);
 signal BLOKADAPO			: std_logic_vector (7 downto 0);
 signal CS_BLOKADAPO			: STD_LOGIC;
-signal STER_SHAFT			: std_logic_vector (7 downto 0);
 signal CS_TIMERCTRL 		: STD_LOGIC;
 signal RNW_TIMERCTRL 		: STD_LOGIC;
 signal TIMERCTRL			: std_logic_vector (15 downto 0);
@@ -515,8 +518,11 @@ Port (
 					
 		--Generator signals
 		SH_GEN			: in std_logic;		-- Internal generator printing
-
-		SH_F_16MHZ		: in std_logic
+		SH_F_16MHZ		: in std_logic;
+		
+		-- Frequency multiplier settings signal
+		SH_FREQ_MUL		: in  std_logic_vector (7 downto 0); -- DLL (MULTIPLIER FREQUENCY * SH_FREQ_MUL(3 downto 0))	
+		N_RESET				: in  std_logic
 	);
 end component SHAFT;
 signal SHAFT_DIRECTION :std_logic;
@@ -769,6 +775,7 @@ begin
 	CS_KOREKCJE <= '0';
 	CS_BLOKADAPO <= '0';
 	CS_STER_SHAFT <= '0';
+	CS_STER_SH_MUL <= '0';
 	CS_TIMERCTRL <= '0';
 	CS_TIMERCTRL_COR <= '0';
 	CS_FAZATEST_X <= '0';
@@ -794,6 +801,7 @@ begin
 		CS_KOREKCJE <= '0';
 		CS_BLOKADAPO <= '0';
 		CS_STER_SHAFT <= '0';
+		CS_STER_SH_MUL <= '0';
 		CS_TIMERCTRL <= '0';
 		CS_TIMERCTRL_COR <= '0';
 		CS_FAZATEST_X <= '0';
@@ -872,6 +880,13 @@ begin
 			if (PROC_R_NW='1')then
 				PROC_DATA_OUT(7 downto 0) <= (others =>'0');
 				PROC_DATA_OUT (15 downto 8) <= STER_SHAFT;
+			end if;
+			
+		elsif (PROC_ADDR = STER_SH_MUL_ADDR) then
+			CS_STER_SH_MUL <= '1';
+			if (PROC_R_NW='1')then
+				PROC_DATA_OUT(7 downto 0) <= (others =>'0');
+				PROC_DATA_OUT (15 downto 8) <= STER_SH_MUL;
 			end if;
 			
 		elsif (PROC_ADDR = TIMERCTRL_ADDR or PROC_ADDR = TIMERCTRL_ADDR+1) then
@@ -1051,6 +1066,16 @@ PORT MAP (
 			DATA_IN (7 downto 0)	=> PROC_DATA_IN(7 downto 0),
 			DATA_OUT	=> STER_SHAFT,
 			CS 		=> CS_STER_SHAFT,
+			RNW		=> PROC_R_NW,
+			RST		=> N_RESET
+		);
+		
+-- STER_SH_MUL
+STER_SH_MUL_MAP: IOREG8
+PORT MAP (
+			DATA_IN (7 downto 0)	=> PROC_DATA_IN(7 downto 0),
+			DATA_OUT	=> STER_SH_MUL,
+			CS 		=> CS_STER_SH_MUL,
 			RNW		=> PROC_R_NW,
 			RST		=> N_RESET
 		);
@@ -1386,8 +1411,9 @@ PORT MAP (
 					
 			--Generator signals
 			SH_GEN		=> PROC_GEN,
-
-			SH_F_16MHZ	=> PROC_16MHZ
+			SH_F_16MHZ	=> PROC_16MHZ,
+			SH_FREQ_MUL => STER_SH_MUL,
+			N_RESET => N_RESET
 		);
 
 --CZAS_PRZELOTU----------------------------------------------------------------

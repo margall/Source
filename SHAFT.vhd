@@ -4,7 +4,7 @@
 -- 
 -- Create Date:		12:30:32 01/16/2007 
 -- Design Name: 	Printer control logic
--- Module Name:		SHAFT - Behavioral 
+-- Module Name:	SHAFT - Behavioral 
 -- Project Name:	EBS7100	
 -- Target Devices: 	XC3S200-4PQ208
 -- Tool versions:	ISE 8.2.03i 
@@ -20,6 +20,9 @@
 -- Dependencies: 
 --
 -- Revision:
+-- Rev 0.05
+-- 2015-06-10
+-- Simplification of whole structure
 --
 -- Rev 0.04
 -- 2014-06-04
@@ -59,20 +62,26 @@ entity SHAFT is
 					
 			--Generator signals
 			SH_GEN			: in 	std_logic;		-- Internal generator printing
-			SH_F_16MHZ		: in	std_logic	
+			SH_F_16MHZ		: in	std_logic;
+			
+			-- Frequency multiplier settings signal
+			SH_FREQ_MUL		: in  std_logic_vector (7 downto 0);
+			
+			N_RESET			: in  std_logic
 			);
 end SHAFT;
 
 architecture BEHAVIORAL of SHAFT is
 
-signal CLKA						: std_logic;	-- SHAFT_IN or edges of SHAFT_IN (SH_CO_POL_TAKT)
+signal CLKA						: std_logic;	-- SHAFT_IN or edges of SHAFT_IN (depends on SH_CO_POL_TAKT)
 signal CLR						: std_logic;	-- reset structure
 signal LOAD						: std_logic;	-- output from DIV_8
 signal SHAFT_IN_PRE_BUF		: std_logic;	-- initial buffer of input signal
+signal SHAFT_IN_MULT_FREQ	: std_logic;	-- initial buffer of input signal
 signal SHAFT_IN_BUF			: std_logic;	-- buffer used to detecting edges
 signal CLKA_BUF				: std_logic;	-- buffer used to make impuls of SHAFT_DIV
 signal SHAFT_DIV				: std_logic;	-- output from shaft edges detecting
-signal ROWS_S_CLK				: std_logic;	-- output SHAFT_DIV or SH_GEN (SH_SHFT_NGEN)
+signal ROWS_S_CLK				: std_logic;	-- output SHAFT_DIV or SH_GEN (depends on SH_SHFT_NGEN)
 
 -- signal STER_SHAFT_CNT : integer range 0 to 255 := 0;
 -- freq CLK_OUT = freq CLK_IN / STER_SHAFT_CNT + 1 when SH_CO_POL_TAKT = 1
@@ -87,6 +96,16 @@ Port (
 		);
 end component;
 
+component SH_FREQ_MULTIPLIER is
+    Port ( 
+			  SH_IN			: in STD_LOGIC;	-- SHAFT ENCODER INPUT
+			  SH_16MHz_CLK : in STD_LOGIC;	-- GLOBAL CLOCK
+			  SH_FREQ_MUL 	: in STD_LOGIC_VECTOR(7 downto 0);	-- STATUS REGISTER
+			  N_RESET			: in STD_LOGIC;	-- RESET
+           FREQ_OUT 		: out STD_LOGIC	-- OUTPUT
+			  );
+end component;
+
 begin
 
 -- Shaft divider block
@@ -96,6 +115,14 @@ port map (	 PORT_IN => SH_STERSHAFT,
 				 CLK_IN	=> CLKA,
 				 CLK_OUT => LOAD,
 				 CLR	=> CLR
+			);
+			
+SH_FREQ_MULT_MAP : SH_FREQ_MULTIPLIER
+port map (	SH_IN => SHAFT_IN_PRE_BUF,
+				SH_16MHz_CLK => SH_F_16MHZ,
+				SH_FREQ_MUL => SH_FREQ_MUL,
+				N_RESET => N_RESET,
+				FREQ_OUT => SHAFT_IN_MULT_FREQ
 			);
 
 -- CLEAR all signals --> reset structure
@@ -110,13 +137,13 @@ begin
 		CLKA_BUF <= '0';
 	elsif (SH_F_16MHZ'event and SH_F_16MHZ='1') then
 		SHAFT_IN_PRE_BUF <= SH_SHAFT_IN;
-		SHAFT_IN_BUF <= SHAFT_IN_PRE_BUF;
+		SHAFT_IN_BUF <= SHAFT_IN_MULT_FREQ;
 		CLKA_BUF <= CLKA;
 	end if;
 end process buffers;
 
 -- operating mode (one edge, both edges)
-CLKA <= SHAFT_IN_PRE_BUF when SH_CO_POL_TAKT = '0' else (SHAFT_IN_PRE_BUF xor SHAFT_IN_BUF);
+CLKA <= SHAFT_IN_MULT_FREQ when SH_CO_POL_TAKT = '0' else (SHAFT_IN_BUF xor SHAFT_IN_MULT_FREQ);
 
 -- generate impuls when CLKA = 1 and LOAD(out of DIV_8) = 1, only one clk --> CLKA_BUF buffers CLKA   	 
 SHAFT_DIV <= (not CLKA_BUF) and LOAD and CLKA;
