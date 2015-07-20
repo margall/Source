@@ -20,6 +20,7 @@
 -- Dependencies: 
 --
 -- Revision:
+--
 -- Rev 0.05
 -- 2015-06-10
 -- Simplification of whole structure
@@ -132,15 +133,23 @@ CLR <= not SH_START_B;
 buffers: process(SH_F_16MHZ, CLR)
 begin
 	if (CLR = '1') then
-		SHAFT_IN_PRE_BUF <= '0';
 		SHAFT_IN_BUF <= '0';
 		CLKA_BUF <= '0';
 	elsif (SH_F_16MHZ'event and SH_F_16MHZ='1') then
-		SHAFT_IN_PRE_BUF <= SH_SHAFT_IN;
 		SHAFT_IN_BUF <= SHAFT_IN_MULT_FREQ;
 		CLKA_BUF <= CLKA;
 	end if;
 end process buffers;
+
+sh_in_pre_buffer : process (SH_F_16MHZ)
+begin
+	if N_RESET = '0' then
+		SHAFT_IN_PRE_BUF <= '0';
+	elsif (SH_F_16MHZ'event and SH_F_16MHZ = '1') then
+		SHAFT_IN_PRE_BUF <= SH_SHAFT_IN;
+	end if;
+end process sh_in_pre_buffer;
+
 
 -- operating mode (one edge, both edges)
 CLKA <= SHAFT_IN_MULT_FREQ when SH_CO_POL_TAKT = '0' else (SHAFT_IN_BUF xor SHAFT_IN_MULT_FREQ);
@@ -161,13 +170,15 @@ begin
 	end if;
 end process ROWS_S_PROC;
 
--- Include encoder direction
-SHAFT_DIR_PROC: process (SH_SHAFT_IN, SH_SHAFT_B)
-begin
-	if (SH_SHAFT_B'event and SH_SHAFT_B = '1') then
-		SH_DIR <= SH_SHAFT_IN;
-	end if;
-end process SHAFT_DIR_PROC;
+---- Include encoder direction
+--SHAFT_DIR_PROC: process (SH_SHAFT_IN, SH_SHAFT_B)
+--begin
+--	if (SH_SHAFT_B'event and SH_SHAFT_B = '1') then
+--		SH_DIR <= SH_SHAFT_IN;
+--	end if;
+--end process SHAFT_DIR_PROC;
+
+SH_DIR <= SHAFT_IN_MULT_FREQ;
 
 end BEHAVIORAL;
 

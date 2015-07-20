@@ -78,7 +78,7 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 --use UNISIM.VComponents.all;
 
 entity MAIN_6500 is
-	Generic (ST6_TST : integer := 0;	-- if 1 test signals for ST6 connector
+	Generic (ST6_TST : integer := 2;	-- if 1 test signals for ST6 connector
 		--EBS6500_dropgen_width : integer := 5;	-- 5 drops used in correction
 		EBS6500_dropgen_width : integer := 8;	-- 8 drops used in correction
 		EBS6500_serial_charging : boolean := false;		--  do not use serial charging interface
@@ -230,7 +230,7 @@ constant PORTFAZA_ADDR			: std_logic_vector(15 downto 0):= "0000000001000000" ;
 constant KOREKCJE_ADDR			: std_logic_vector(15 downto 0):= "0000000010000000" ;
 constant BLOKADAPO_ADDR			: std_logic_vector(15 downto 0):= "0000000010000010" ;
 constant STER_SHAFT_ADDR		: std_logic_vector(15 downto 0):= "0000000100000000" ;
-constant STER_SH_MUL_ADDR		: std_logic_vector(15 downto 0):= "0000000100000001" ;
+constant STER_SH_MUL_ADDR		: std_logic_vector(15 downto 0):= "0000000100000010" ;
 constant TIMERCTRL_ADDR			: std_logic_vector(15 downto 0):= "0000001000000000" ;
 constant FAZATEST_X_ADDR		: std_logic_vector(15 downto 0):= "0000010000000000" ;
 constant TIMERRYNNA_ADDR		: std_logic_vector(15 downto 0):= "0000100000000000" ;
@@ -1475,6 +1475,17 @@ USB_STAT(1) <= SS1;		--TXE
 --NDATA_ACK <= '0' when ((CS_USB_DATA = '1') and (PROC_R_NW = '1')) else '1';
 		
 --Test signals on ST6 connector ------------------------------
+
+ST6_TST_2:
+	if (ST6_TST = 2) generate
+LADEXSF <= SHAFT_DIRECTION; --temporary SH_FREQ_MUL;
+RESOUTSF <= SHAFT_IN; -- shaft
+CLK_WY0 <= ROWS_S;
+SFT_OUT <= FAZATEST_X(7);
+ZAPAS_WY0 <= (RZADEK_N_WOLNY and KONIEC_RZADKA);--FAZATEST_X(6);
+end generate;
+
+
 ST6_TST_1:
 	if (ST6_TST = 1) generate
 LADEXSF <= FAZA_DRUK; --FAZA_DRUK;
