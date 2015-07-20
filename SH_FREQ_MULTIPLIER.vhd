@@ -179,57 +179,40 @@ begin
 			end if;
 			if update_1 = '1' then
 				if shaft_counter > fback_counter then
-					diffrence <= '0' & mul_freq_count_to + shaft_counter - fback_counter;		
+					if mul_freq_count_to /= x"FFFF" then
+						if ((shaft_counter - fback_counter) > x"0020") then
+							diffrence <= '0' & mul_freq_count_to + std_logic_vector((unsigned(shaft_counter - fback_counter)) srl (weight/4));
+						elsif ((shaft_counter - fback_counter) > x"0010") then
+							diffrence <= '0' & mul_freq_count_to + "10";
+						elsif ((shaft_counter - fback_counter) > x"00" & std_logic_vector(to_unsigned(weight/2, 8))) then
+							diffrence <= '0' & mul_freq_count_to + '1';
+						end if;
+					else
+						diffrence <= '0' & mul_freq_count_to + shaft_counter - fback_counter;
+					end if;
 				elsif shaft_counter < fback_counter then
-					diffrence <= '0' & mul_freq_count_to - fback_counter + shaft_counter;	
+					if mul_freq_count_to /= x"FFFF" then
+						if ((fback_counter - shaft_counter) > x"0020") then
+							diffrence <= '0' & mul_freq_count_to - std_logic_vector((unsigned(fback_counter + shaft_counter)) srl (weight/4));
+						elsif ((fback_counter - shaft_counter) > x"0010") then
+							diffrence <= '0' & mul_freq_count_to - "10";
+						elsif ((fback_counter - shaft_counter) > x"00" & std_logic_vector(to_unsigned(weight/2, 8))) then
+							diffrence <= '0' & mul_freq_count_to - '1';
+						end if;
+					else
+						diffrence <= '0' & mul_freq_count_to - fback_counter + shaft_counter;
+					end if;
 				end if;
 			end if;
 			if update_2 = '1' then
-				if diffrence(16) = '0' then				
-					if mul_freq_count_to /= x"FFFF" then
-						if ((shaft_counter - fback_counter) > x"0020") then
-							mul_freq_count_to <= mul_freq_count_to + std_logic_vector((unsigned(shaft_counter - fback_counter)) srl (weight/4));
-						elsif ((shaft_counter - fback_counter) > x"0010") then
-							mul_freq_count_to <= mul_freq_count_to + "10";
-						elsif ((shaft_counter - fback_counter) > x"00" & std_logic_vector(to_unsigned(weight/2, 8))) then
-							mul_freq_count_to <= mul_freq_count_to + '1';
-						end if;
-					else
-						mul_freq_count_to <= mul_freq_count_to + shaft_counter - fback_counter;
-					end if;
-					if mul_freq_count_to /= x"FFFF" then
-						if ((fback_counter - shaft_counter) > x"0020") then
-							mul_freq_count_to <= mul_freq_count_to - std_logic_vector((unsigned(fback_counter + shaft_counter)) srl (weight/4));
-						elsif ((fback_counter - shaft_counter) > x"0010") then
-							mul_freq_count_to <= mul_freq_count_to - "10";
-						elsif ((fback_counter - shaft_counter) > x"00" & std_logic_vector(to_unsigned(weight/2, 8))) then
-							mul_freq_count_to <= mul_freq_count_to - '1';
-						end if;
-					else
-						mul_freq_count_to <= mul_freq_count_to - fback_counter + shaft_counter;
-					end if;
+				if diffrence(16) = '0' then
+					mul_freq_count_to <= diffrence(15 downto 0);
 				elsif shaft_counter > fback_counter then
-					if (mul_freq_count_to + x"F") > mul_freq_count_to then
-						mul_freq_count_to <= mul_freq_count_to + x"F";
-						diffrence <= '0' & mul_freq_count_to + x"F";
-					elsif (mul_freq_count_to + x"6") > mul_freq_count_to then
-						mul_freq_count_to <= mul_freq_count_to + x"6";
-						diffrence <= '0' & mul_freq_count_to + x"6";
-					else
-						mul_freq_count_to <= mul_freq_count_to + x"1";
-						diffrence <= '0' & mul_freq_count_to + x"1";
-					end if;
+					mul_freq_count_to <= mul_freq_count_to + 1;
+					diffrence <= '0' & mul_freq_count_to + 1;
 				else
-					if (mul_freq_count_to - x"F") < mul_freq_count_to then
-						mul_freq_count_to <= mul_freq_count_to - x"F";
-						diffrence <= '0' & mul_freq_count_to - x"F";
-					elsif (mul_freq_count_to - x"6") < mul_freq_count_to then
-						mul_freq_count_to <= mul_freq_count_to - x"6";
-						diffrence <= '0' & mul_freq_count_to - x"6";
-					else
-						mul_freq_count_to <= mul_freq_count_to - x"1";
-						diffrence <= '0' & mul_freq_count_to - x"1";
-					end if;
+					mul_freq_count_to <= mul_freq_count_to - 1;
+					diffrence <= '0' & mul_freq_count_to - 1;
 				end if;
 			end if;
 		end if;
