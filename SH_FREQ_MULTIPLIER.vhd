@@ -33,25 +33,33 @@ end SH_FREQ_MULTIPLIER;
 
 architecture Behavioral of SH_FREQ_MULTIPLIER is
 
+type RAM_MEMORY is array (7 downto 0) of signed(22 downto 0);
+
+signal AVERAGE_ERROR : RAM_MEMORY := (others => (others => '0'));
+
 signal IN_BUF : std_logic; -- buffered signal from shaft
 signal EDGE : std_logic;	-- edge of SH_IN
-signal counter_in : std_logic_vector (15 downto 0);
+signal counter_in : std_logic_vector (21 downto 0);
 signal mul_freq_count : std_logic_vector (15 downto 0);
 signal mul_freq_count_to : std_logic_vector (15 downto 0);
 signal counter_fback : std_logic_vector (7 downto 0);
 signal counter_fback_initial : std_logic_vector (7 downto 0) := (others => '0');
-signal to_compare_count : std_logic_vector (15 downto 0);
+signal to_compare_count : std_logic_vector (21 downto 0);
 signal mul_freq : std_logic;
-signal update_1 : std_logic;
-signal update_2 : std_logic;
+signal update : std_logic;
+signal update_count : std_logic_vector (1 downto 0);
 signal edges_counter_sh : std_logic_vector (1 downto 0);
 signal edges_counter_fb : std_logic_vector (1 downto 0);
-signal shaft_counter : std_logic_vector (15 downto 0);
-signal fback_counter : std_logic_vector (15 downto 0);
+signal shaft_counter : std_logic_vector (21 downto 0);
+signal fback_counter : std_logic_vector (21 downto 0);
 signal get_shaft_counter : std_logic;
 signal get_fback_counter : std_logic;
-signal diffrence : std_logic_vector (16 downto 0);
-signal weight : integer range 0 to 15;
+signal difference : signed (22 downto 0);
+signal start : std_logic;
+signal mul_freq_init : std_logic := '0';
+signal mul_freq_init_load : std_logic := '0';
+signal mul_freq_div : std_logic_vector(21 downto 0);
+signal mul_freq_div_out : std_logic_vector(21 downto 0);
 
 begin	
 
@@ -64,8 +72,6 @@ begin
 	-- edge detection
 	EDGE <= SH_IN xor IN_BUF when SH_FREQ_MUL(7) = '1'
 			  else (SH_IN xor IN_BUF) and SH_IN;
-			  
-	weight <= to_integer(unsigned(counter_fback_initial));
 	
 	-- buffer input signal --> edge detection
 	buffer_proc : process (SH_16MHz_CLK)
@@ -87,24 +93,36 @@ begin
 			shaft_counter <= (others => '0');
 			fback_counter <= (others => '0');
 		elsif (SH_16MHz_CLK'event and SH_16MHz_CLK = '1') then
-			if counter_in /= x"FFFF" then
+		
+			if counter_in /= "11" & x"FFFFF" then
 				counter_in <= counter_in + 1;
 			end if;
-			if to_compare_count /= x"FFFF" then
+			
+			if to_compare_count /= "11" & x"FFFFF" then
 				to_compare_count <= to_compare_count + 1;
 			end if;
+			
 			if EDGE = '1' then
-				shaft_counter <= counter_in;
-				counter_in <= (others => '0');
+				if start = '1' then
+					shaft_counter <= (others => '0');
+					to_compare_count <= (others => '0');
+					counter_in <= (others => '0');
+					fback_counter <= (others => '0');
+				else
+					shaft_counter <= counter_in;
+					counter_in <= (others => '0');
+				end if;
 			elsif get_shaft_counter = '1' then
 				shaft_counter <= counter_in;
 			end if;
+			
 			if (counter_fback = x"00" and mul_freq_count = x"0000") then
 				fback_counter <= to_compare_count;
 				to_compare_count <= (others => '0');
 			elsif get_fback_counter = '1' then
 				fback_counter <= to_compare_count;
 			end if;	
+			
 		end if;
 	end process;
 	
@@ -145,22 +163,28 @@ begin
 		if N_RESET = '0' then
 			edges_counter_sh<= (others => '0');
 			edges_counter_fb<= (others => '0');
-			update_1 <= '0';
-			update_2 <= '0';
+			update <= '0';
+			update_count <= (others => '0');
 			get_shaft_counter <= '0';
 			get_fback_counter <= '0';
-			diffrence<= '0' & x"FFFF";
 			mul_freq_count_to<= (others => '1');
 		elsif (SH_16MHz_CLK'event and SH_16MHz_CLK = '1') then
-			update_2 <= update_1;
+			
 			if (EDGE = '1') then
 				edges_counter_sh <= edges_counter_sh + 1;
 			elsif (counter_fback = x"00" and mul_freq_count = x"0000") then
 				edges_counter_fb <= edges_counter_fb + 1;
-			end if;			
+			end if;
+			
 			if ((edges_counter_sh + edges_counter_fb) = "11") then
-				if (edges_counter_sh /= "00" and edges_counter_fb /= "00") then
-					update_1 <= '1';
+				if mul_freq_init = '1' or mul_freq_init_load = '1' then
+					get_fback_counter <= '1';
+					update <= '0';
+					edges_counter_sh <= (others => '0');
+					edges_counter_fb <= (others => '0');
+				elsif (edges_counter_sh /= "00" and edges_counter_fb /= "00") then
+					update <= '1';
+					update_count <= update_count + 1;
 					edges_counter_sh <= "00";
 					edges_counter_fb <= "00";
 				elsif (edges_counter_sh = "00") then
@@ -173,50 +197,93 @@ begin
 					edges_counter_sh <= edges_counter_sh - 1;
 				end if;
 			else
-				update_1 <= '0';
+				update <= '0';
 				get_fback_counter	<= '0';			
 				get_shaft_counter <= '0';
 			end if;
-			if update_1 = '1' then
-				if shaft_counter > fback_counter then
-					if mul_freq_count_to /= x"FFFF" then
-						if ((shaft_counter - fback_counter) > x"0020") then
-							diffrence <= '0' & mul_freq_count_to + std_logic_vector((unsigned(shaft_counter - fback_counter)) srl (weight/4));
-						elsif ((shaft_counter - fback_counter) > x"0010") then
-							diffrence <= '0' & mul_freq_count_to + "10";
-						elsif ((shaft_counter - fback_counter) > x"00" & std_logic_vector(to_unsigned(weight/2, 8))) then
-							diffrence <= '0' & mul_freq_count_to + '1';
-						end if;
-					else
-						diffrence <= '0' & mul_freq_count_to + shaft_counter - fback_counter;
+			
+			if (shaft_counter /= "00" & x"00000" and fback_counter = "00" & x"00000" and EDGE = '1') then
+				mul_freq_init <= '1';
+			elsif  mul_freq_init = '1' and EDGE = '1' then
+				mul_freq_init_load <= '1';
+				mul_freq_init <= '0';
+			elsif mul_freq_init_load = '1' and EDGE = '1' then
+				mul_freq_init_load <= '0';
+				mul_freq_count_to <= mul_freq_div_out (15 downto 0);
+			elsif update_count = "00" and update <= '1' then
+				if (difference > signed(SH_FREQ_MUL) ) and difference < 64 then
+					if mul_freq_count_to < x"FFFF" then
+						mul_freq_count_to <= mul_freq_count_to - '1';
 					end if;
-				elsif shaft_counter < fback_counter then
-					if mul_freq_count_to /= x"FFFF" then
-						if ((fback_counter - shaft_counter) > x"0020") then
-							diffrence <= '0' & mul_freq_count_to - std_logic_vector((unsigned(fback_counter + shaft_counter)) srl (weight/4));
-						elsif ((fback_counter - shaft_counter) > x"0010") then
-							diffrence <= '0' & mul_freq_count_to - "10";
-						elsif ((fback_counter - shaft_counter) > x"00" & std_logic_vector(to_unsigned(weight/2, 8))) then
-							diffrence <= '0' & mul_freq_count_to - '1';
-						end if;
-					else
-						diffrence <= '0' & mul_freq_count_to - fback_counter + shaft_counter;
+				elsif (difference < -(signed(SH_FREQ_MUL))) and difference > -64 then
+					if mul_freq_count_to > x"0000" then
+						mul_freq_count_to <= mul_freq_count_to + '1';
 					end if;
-				end if;
-			end if;
-			if update_2 = '1' then
-				if diffrence(16) = '0' then
-					mul_freq_count_to <= diffrence(15 downto 0);
-				elsif shaft_counter > fback_counter then
-					mul_freq_count_to <= mul_freq_count_to + 1;
-					diffrence <= '0' & mul_freq_count_to + 1;
+				elsif difference < 128 or difference > -128 then
+					if (signed(mul_freq_count_to) + shift_right(difference(15 downto 0), 5)) < 65535 and (signed(mul_freq_count_to) + shift_right(difference(15 downto 0), 5)) > 0 then
+						if (signed(mul_freq_count_to) + shift_right(difference(15 downto 0), 5)) /= signed(mul_freq_count_to) then
+							mul_freq_count_to <= std_logic_vector(signed(mul_freq_count_to) - shift_right(difference(15 downto 0), 5));
+						elsif difference > 0 then
+							mul_freq_count_to <= mul_freq_count_to + '1';
+						else
+							mul_freq_count_to <= mul_freq_count_to - '1';
+						end if;
+					end if;
 				else
-					mul_freq_count_to <= mul_freq_count_to - 1;
-					diffrence <= '0' & mul_freq_count_to - 1;
+					if (signed(mul_freq_count_to) + shift_right(difference(15 downto 0), 8)) < 65535 and (signed(mul_freq_count_to) + shift_right(difference(15 downto 0), 8)) > 0 then
+						mul_freq_count_to <= std_logic_vector(signed(mul_freq_count_to) - shift_right(difference(15 downto 0), 8));
+					end if;
 				end if;
 			end if;
+			
+			if counter_in = "11" & x"FFFFF" or shaft_counter = "11" & x"FFFFF" then
+				start <= '1';
+			else
+				start <= '0';
+			end if;
+			
 		end if;
 	end process;
+	
+init_divider : process (SH_16MHz_CLK)
+begin
+	if N_RESET = '0' then
+			mul_freq_div <= (others => '0');
+			mul_freq_div_out <= (others => '0');
+	elsif (SH_16MHz_CLK'event and SH_16MHz_CLK = '1') then
+		if mul_freq_init = '1' then
+			mul_freq_div <= shaft_counter;
+		elsif mul_freq_div >= counter_fback_initial then
+			mul_freq_div <= mul_freq_div - counter_fback_initial;
+			mul_freq_div_out <= mul_freq_div_out + '1';
+		end if;
+	end if;
+end process;
+
+avr_diff : process (SH_16MHz_CLK)
+begin
+	if N_RESET = '0' then
+			AVERAGE_ERROR <= (others => (others => '0'));
+			difference<= (others => '0');
+	elsif (SH_16MHz_CLK'event and SH_16MHz_CLK = '1') then
+		if update = '0' then
+			difference <= ((AVERAGE_ERROR(0) + AVERAGE_ERROR(1) + AVERAGE_ERROR(2) + AVERAGE_ERROR(3) 
+			+ AVERAGE_ERROR(4) + AVERAGE_ERROR(5) + AVERAGE_ERROR(6) + AVERAGE_ERROR(7))/ x"8");
+		elsif update = '1' then
+			AVERAGE_ERROR(7) <= AVERAGE_ERROR(6);
+			AVERAGE_ERROR(6) <= AVERAGE_ERROR(5);
+			AVERAGE_ERROR(5) <= AVERAGE_ERROR(4);
+			AVERAGE_ERROR(4) <= AVERAGE_ERROR(3);
+			AVERAGE_ERROR(3) <= AVERAGE_ERROR(2);
+			AVERAGE_ERROR(2) <= AVERAGE_ERROR(1);
+			AVERAGE_ERROR(1) <= AVERAGE_ERROR(0);
+			AVERAGE_ERROR(0) <= (signed('0' & shaft_counter) - signed(fback_counter));
+		end if;
+	end if;
+end process;
+			
+			
+
 	
 -- MUX of output --> if	SH_FREQ_MUL = x"00" then output = input
 FREQ_OUT <= SH_IN when SH_FREQ_MUL = x"00"
