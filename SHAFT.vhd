@@ -65,7 +65,7 @@ entity SHAFT is
 			SH_GEN			: in 	std_logic;		-- Internal generator printing
 			SH_F_16MHZ		: in	std_logic;
 			
-			-- Frequency multiplier settings signal
+			-- Frequency multiplier settings signal (significant (3 donwto 0) --> 0-15)
 			SH_FREQ_MUL		: in  std_logic_vector (7 downto 0);
 			
 			N_RESET			: in  std_logic
@@ -99,11 +99,11 @@ end component;
 
 component SH_FREQ_MULTIPLIER is
     Port ( 
-			  SH_IN			: in STD_LOGIC;	-- SHAFT ENCODER INPUT
-			  SH_16MHz_CLK : in STD_LOGIC;	-- GLOBAL CLOCK
+			  SH_IN			: in STD_LOGIC;							-- SHAFT ENCODER INPUT
+			  SH_16MHz_CLK : in STD_LOGIC;							-- GLOBAL CLOCK
 			  SH_FREQ_MUL 	: in STD_LOGIC_VECTOR(7 downto 0);	-- STATUS REGISTER
-			  N_RESET			: in STD_LOGIC;	-- RESET
-           FREQ_OUT 		: out STD_LOGIC	-- OUTPUT
+			  N_RESET			: in STD_LOGIC;						-- RESET
+           FREQ_OUT 		: out STD_LOGIC							-- OUTPUT
 			  );
 end component;
 
@@ -170,15 +170,13 @@ begin
 	end if;
 end process ROWS_S_PROC;
 
----- Include encoder direction
---SHAFT_DIR_PROC: process (SH_SHAFT_IN, SH_SHAFT_B)
---begin
---	if (SH_SHAFT_B'event and SH_SHAFT_B = '1') then
---		SH_DIR <= SH_SHAFT_IN;
---	end if;
---end process SHAFT_DIR_PROC;
-
-SH_DIR <= SHAFT_IN_MULT_FREQ;
+-- Include encoder direction
+SHAFT_DIR_PROC: process (SH_SHAFT_IN, SH_SHAFT_B)
+begin
+	if (SH_SHAFT_B'event and SH_SHAFT_B = '1') then
+		SH_DIR <= SH_SHAFT_IN;
+	end if;
+end process SHAFT_DIR_PROC;
 
 end BEHAVIORAL;
 

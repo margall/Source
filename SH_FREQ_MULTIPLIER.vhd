@@ -2,13 +2,13 @@
 -- Company: EBS INK-JET SYSTEMS POLAND
 -- Engineer: Marek Gallus
 -- 
--- Create Date:    09:09:52 07/13/2015 
--- Design Name: 
--- Module Name:    SH_FREQ_MULTIPLIER - Behavioral 
--- Project Name: 
--- Target Devices: 
--- Tool versions: 
--- Description: 
+-- Create Date:    	09:09:52 07/13/2015 
+-- Design Name: 	 	Printer control logic
+-- Module Name:    	SH_FREQ_MULTIPLIER - Behavioral 
+-- Project Name: 	 	EBS6500
+-- Target Devices: 	XC3S200-4PQ208
+-- Tool versions:  	ISE 14.2
+-- Description: 		Module DLL, multiplication signal from shaft encoder 
 --
 -- Dependencies: 
 --
@@ -23,18 +23,17 @@ use IEEE.STD_LOGIC_UNSIGNED.ALL;
 use IEEE.NUMERIC_STD.ALL;
 
 entity SH_FREQ_MULTIPLIER is
-    Port ( SH_IN			: in STD_LOGIC;	-- SHAFT ENCODER INPUT
-			  SH_16MHz_CLK : in STD_LOGIC;	-- GLOBAL CLOCK
+    Port ( SH_IN			: in STD_LOGIC;							-- SHAFT ENCODER INPUT
+			  SH_16MHz_CLK : in STD_LOGIC;							-- GLOBAL CLOCK
 			  SH_FREQ_MUL 	: in STD_LOGIC_VECTOR(7 downto 0);	-- STATUS REGISTER (STER_SH_MUL)
-			  N_RESET		: in STD_LOGIC;	-- RESET
-           FREQ_OUT 		: out STD_LOGIC	-- OUTPUT
+			  N_RESET		: in STD_LOGIC;							-- RESET
+           FREQ_OUT 		: out STD_LOGIC							-- OUTPUT
 			  );
 end SH_FREQ_MULTIPLIER;
 
 architecture Behavioral of SH_FREQ_MULTIPLIER is
 
 type RAM_MEMORY is array (7 downto 0) of signed(22 downto 0);
-
 signal AVERAGE_ERROR : RAM_MEMORY := (others => (others => '0'));
 
 signal IN_BUF : std_logic;
@@ -61,15 +60,18 @@ signal mul_freq_init_load : std_logic := '0';
 signal mul_freq_div : std_logic_vector(21 downto 0);
 signal mul_freq_div_out : std_logic_vector(21 downto 0);
 
+-- average --> 8 values divided by 8
+constant AVR_div : integer := 8;
+
 begin	
 
 	-- frequency multiplication in DLL feedback (f * (SH_FREQ_MUL(3 downto 0) + 1))
-	-- SH_FREQ_MUL(7) = '0' --> both edges of shaft, '1' --> only rising edge (temporarily for tests)
+	-- SH_FREQ_MUL(7) = '0' --> only rising edge, '1' -->  both edges of shaft(only for tests)
 	-- expected operation mode --> only rising edge
 	counter_fback_initial <= x"0" & SH_FREQ_MUL(3 downto 0) when SH_FREQ_MUL(7) = '1'
 									 else "00" & (SH_FREQ_MUL(3 downto 0) * "10") + 1;
 	
-	-- edge detection
+	-- edge detection (analogously as above)
 	EDGE <= SH_IN xor IN_BUF when SH_FREQ_MUL(7) = '1'
 			  else (SH_IN xor IN_BUF) and SH_IN;
 	
@@ -85,6 +87,8 @@ begin
 
 	-- counting pulses from 16MHz clock in SHAFT_IN and mul_freq period**
 	-- **[mul_freq period * counter_fback_initial] period --> mulitiplication of frequency
+	-- latching vealues of counters ( if update or get_shaft_counter or get_fback_counter )
+	-- shaft stop --> reset
 	counters_proc : process (SH_16MHz_CLK)
 	begin
 		if N_RESET = '0' then
@@ -127,6 +131,8 @@ begin
 	end process;
 	
 	-- generate higher frequency signal (mul_freq)
+	-- counting periods of generate signal
+	-- shaft stop --> reset (both mul_freq_init_load)
 	mul_freq_proc : process (SH_16MHz_CLK)
 	begin
 		if N_RESET = '0' or counter_in = x"11" & x"FFFFF" then
@@ -152,14 +158,8 @@ begin
 	
 	-- compare period of SHAFT_IN and mul_freq
 	-- determination of difference
-	-- update parameter of DLL if 3 edges were counted (of SH_IN or MUL_FREQ_COUNT(end of cycle))
-	-- if 3 edges come from the same source --> query the second counter and update his value
-	-- new setting DLL is update using the computed difference / (SH_FREQ_MUL/weight)
-	-- weight --> quantity of frequency multiplication
-	-- if the computed difference = 65535 --> new value = current value + difference
-	-- if the computed difference > 32 --> new value = current value + difference / (weight/4)
-	-- if the computed difference < weight/2 --> new value = current value
-	-- if the computed difference > xFFFF or < 0 setting are changed +/- '1' 
+	-- update parameter of DLL if 3 edges were counted (of SH_IN or MUL_FREQ_COUNT(end of cycle))	
+	-- new setting DLL is update using the computed average difference (average 8 differences)
 	compare : process (SH_16MHz_CLK)
 	begin
 		if N_RESET = '0' then
@@ -172,12 +172,16 @@ begin
 			mul_freq_count_to<= (others => '1');
 		elsif (SH_16MHz_CLK'event and SH_16MHz_CLK = '1') then
 			
+			-- edges counter
+			-- computed difference if 3 edges were counted
+			-- security of correct measure values
 			if (EDGE = '1') then
 				edges_counter_sh <= edges_counter_sh + 1;
 			elsif (counter_fback = x"00" and mul_freq_count = "00" & x"00000") then
 				edges_counter_fb <= edges_counter_fb + 1;
 			end if;
 			
+			-- if 3 edges come from the same source --> query the second counter and update his value
 			if mul_freq_init = '1' or mul_freq_init_load = '1' then
 					update <= '0';
 					edges_counter_sh <= (others => '0');
@@ -204,6 +208,7 @@ begin
 				get_shaft_counter <= '0';
 			end if;
 			
+			-- generate init impuls --> when shaft starts are computed inital values of generate frequency 
 			if (shaft_counter /= "00" & x"00000" and fback_counter = "00" & x"00000" and EDGE = '1') then
 				mul_freq_init <= '1';
 			elsif  mul_freq_init = '1' and EDGE = '1' then
@@ -214,7 +219,11 @@ begin
 				mul_freq_count_to <= mul_freq_div_out;
 			elsif start = '1' then
 				mul_freq_count_to <= "11" & x"FFFFF";
-			elsif ( update = '1') then --update_count = "000" and
+				
+			-- upadte generate frequency after average 8 differences
+			-- new DLL settings are computed using wages of difference
+			-- verification correctness of new value
+			elsif (update_count = "000" and update = '1') then
 				if difference < 128 or difference > -128 then
 					if (difference < signed(counter_fback_initial) and difference > -(signed(counter_fback_initial))) then
 						-- do nothing
@@ -258,6 +267,7 @@ begin
 				end if;
 			end if;
 			
+			-- siganal informs, that shaft stopped
 			if counter_in = "11" & x"FFFFF" or shaft_counter = "11" & x"FFFFF" then
 				start <= '1';
 			else
@@ -266,7 +276,8 @@ begin
 			
 		end if;
 	end process;
-	
+
+-- computed initial values of generate multipilcation frequency	
 init_divider : process (SH_16MHz_CLK)
 begin
 	if N_RESET = '0' then
@@ -283,32 +294,31 @@ begin
 	end if;
 end process;
 
+--computed average difference (8 diferences) 
 avr_diff : process (SH_16MHz_CLK)
 begin
-	if N_RESET = '0' then
+	if N_RESET = '0' or counter_in = x"11" & x"FFFFF" then
 			AVERAGE_ERROR <= (others => (others => '0'));
 			difference<= (others => '0');
 	elsif (SH_16MHz_CLK'event and SH_16MHz_CLK = '1') then
 		if update = '0' then
-			difference <= (signed('0' & shaft_counter) - signed(fback_counter));
---			difference <= ((AVERAGE_ERROR(0) + AVERAGE_ERROR(1) + AVERAGE_ERROR(2) + AVERAGE_ERROR(3) 
---			+ AVERAGE_ERROR(4) + AVERAGE_ERROR(5) + AVERAGE_ERROR(6) + AVERAGE_ERROR(7))/ x"8");
---		elsif update = '1' then
---			AVERAGE_ERROR(7) <= AVERAGE_ERROR(6);
---			AVERAGE_ERROR(6) <= AVERAGE_ERROR(5);
---			AVERAGE_ERROR(5) <= AVERAGE_ERROR(4);
---			AVERAGE_ERROR(4) <= AVERAGE_ERROR(3);
---			AVERAGE_ERROR(3) <= AVERAGE_ERROR(2);
---			AVERAGE_ERROR(2) <= AVERAGE_ERROR(1);
---			AVERAGE_ERROR(1) <= AVERAGE_ERROR(0);
---			AVERAGE_ERROR(0) <= (signed('0' & shaft_counter) - signed(fback_counter));
+			difference <= ((AVERAGE_ERROR(0) + AVERAGE_ERROR(1) + AVERAGE_ERROR(2) + AVERAGE_ERROR(3) 
+								+ AVERAGE_ERROR(4) + AVERAGE_ERROR(5) + AVERAGE_ERROR(6) + AVERAGE_ERROR(7)) 
+								/ to_signed(AVR_div, 22));
+		elsif update = '1' then
+			AVERAGE_ERROR(7) <= AVERAGE_ERROR(6);
+			AVERAGE_ERROR(6) <= AVERAGE_ERROR(5);
+			AVERAGE_ERROR(5) <= AVERAGE_ERROR(4);
+			AVERAGE_ERROR(4) <= AVERAGE_ERROR(3);
+			AVERAGE_ERROR(3) <= AVERAGE_ERROR(2);
+			AVERAGE_ERROR(2) <= AVERAGE_ERROR(1);
+			AVERAGE_ERROR(1) <= AVERAGE_ERROR(0);
+			AVERAGE_ERROR(0) <= (signed('0' & shaft_counter) - signed(fback_counter));
 		end if;
 	end if;
 end process;
 			
 			
-
-	
 -- MUX of output --> if	SH_FREQ_MUL = x"00" then output = input
 FREQ_OUT <= SH_IN when SH_FREQ_MUL = x"00"
 				else mul_freq;

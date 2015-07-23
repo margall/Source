@@ -1478,7 +1478,7 @@ USB_STAT(1) <= SS1;		--TXE
 
 ST6_TST_2:
 	if (ST6_TST = 2) generate
-LADEXSF <= SHAFT_DIRECTION; --temporary SH_FREQ_MUL;
+LADEXSF <= SHAFT_DIRECTION; --temporary SH_FREQ_MUL (change assignment signal in module SHAFT_MAP)
 RESOUTSF <= SHAFT_IN; -- shaft
 CLK_WY0 <= ROWS_S;
 SFT_OUT <= FAZATEST_X(7);

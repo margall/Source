@@ -2,13 +2,13 @@
 -- Company:			EBS INK-JET SYSTEMS POLAND 
 -- Engineer: 		TOMASZ GRONOWICZ
 -- 
--- Create Date:	11:29:20 05/07/2007 
+-- Create Date:		11:29:20 05/07/2007 
 -- Design Name: 		Printer control logic
--- Module Name:	Rows_fire - Behavioral 
--- Project Name: 	 EBS7100	
--- Target Devices: XC3S200-4PQ208
--- Tool versions:	ISE 8.2.03i
--- Description:	Module created from ROWS_FIRE schematic
+-- Module Name:		Rows_fire - Behavioral 
+-- Project Name: 		EBS7100	
+-- Target Devices:	XC3S200-4PQ208
+-- Tool versions:		ISE 8.2.03i
+-- Description:		Module created from ROWS_FIRE schematic
 --
 -- Dependencies: 
 --
